@@ -1,0 +1,36 @@
+--- git commit ---
+ffff603eafc6b74264a5261cc0183d6a65390d78
+
+
+--- git status ---
+Not currently on any branch.
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   scripts/demos/h1_locomotion.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/scripts/demos/h1_locomotion.py b/scripts/demos/h1_locomotion.py
+index 2c166a00b..9ef385e7a 100644
+--- a/scripts/demos/h1_locomotion.py
++++ b/scripts/demos/h1_locomotion.py
+@@ -91,9 +91,15 @@ class H1RoughDemo:
+         checkpoint = get_published_pretrained_checkpoint(RL_LIBRARY, TASK)
+         # create envionrment
+         env_cfg = H1RoughEnvCfg_PLAY()
+-        env_cfg.scene.num_envs = 25
++        env_cfg.scene.num_envs = 1
+         env_cfg.episode_length_s = 1000000
+         env_cfg.curriculum = None
++        env_cfg.commands.base_velocity.debug_vis = False
++
++# Reduce rough terrain size
++        if env_cfg.scene.terrain.terrain_generator is not None:
++            env_cfg.scene.terrain.terrain_generator.num_rows = 1
++            env_cfg.scene.terrain.terrain_generator.num_cols = 1
+         env_cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+         env_cfg.commands.base_velocity.ranges.heading = (-1.0, 1.0)
+         # wrap around environment for rsl-rl
