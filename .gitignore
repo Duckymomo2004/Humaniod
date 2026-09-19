@@ -88,3 +88,13 @@ _build
 
 # Superpowers (Claude Code plugin artifacts)
 docs/superpowers/
+
+# Local simulation installation
+.deps/
+.venv/
+.cache/
+run/
+logs/**/exported/
+
+# Viewer UI state
+imgui.ini

@@ -30,6 +30,7 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--max_steps", type=int, default=100, help="Stop after this many steps; 0 runs until closed.")
 # append AppLauncher cli args
 add_launcher_args(parser)
 # simple agents should open Kit visualizer by default
@@ -68,7 +69,8 @@ def main():
         # keep running while any visualizer is open, otherwise fall back to MAX_STEPS
         sim = env.unwrapped.sim
         actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
-        while True:
+        step = 0
+        while args_cli.max_steps == 0 or step < args_cli.max_steps:
             if sim.visualizers:
                 # visualizer mode: run until the visualizer window is closed
                 if not any(v.is_running() and not v.is_closed for v in sim.visualizers):
@@ -76,7 +78,10 @@ def main():
             # run everything in inference mode
             with torch.inference_mode():
                 # apply actions
-                env.step(actions)
+                obs, reward, terminated, truncated, info = env.step(actions)
+                assert torch.isfinite(reward).all(), "Non-finite simulation rewards"
+                step += 1
+        print(f"[SUCCESS] Simulated {step} steps on {env.unwrapped.device} with {env.unwrapped.num_envs} G1 robots.", flush=True)
         # close the simulator
         env.close()
 

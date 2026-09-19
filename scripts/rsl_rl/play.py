@@ -60,6 +60,7 @@ with contextlib.suppress(ImportError):
 
 # -- argparse ----------------------------------------------------------------
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
+parser.add_argument("--max_steps", type=int, default=0, help="Stop after N simulation steps; 0 runs until closed.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
@@ -219,12 +220,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         timestep = 0
         # simulate environment
         try:
-            while True:
+            while args_cli.max_steps == 0 or timestep < args_cli.max_steps:
+                sim = env.unwrapped.sim
+                if sim.visualizers and not any(v.is_running() and not v.is_closed for v in sim.visualizers):
+                    break
                 start_time = time.time()
                 # run everything in inference mode
                 with torch.inference_mode():
                     # agent stepping
                     actions = policy(obs)
+                    assert torch.isfinite(actions).all(), "Non-finite policy actions"
                     # env stepping
                     obs, _, dones, _ = env.step(actions)
                     # reset recurrent states for episodes that have terminated
@@ -232,8 +237,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                         policy.reset(dones)
                     else:
                         policy_nn.reset(dones)
+                timestep += 1
+                if timestep % 500 == 0:
+                    print(f"[INFO] Walking policy completed {timestep} simulation steps.", flush=True)
                 if args_cli.video:
-                    timestep += 1
                     if timestep == args_cli.video_length:
                         break
 
@@ -241,6 +248,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 if args_cli.real_time and sleep_time > 0:
                     time.sleep(sleep_time)
 
+            print(f"[SUCCESS] Walking policy completed {timestep} steps on {env.unwrapped.device}.", flush=True)
             # close the simulator
             env.close()
         except KeyboardInterrupt:

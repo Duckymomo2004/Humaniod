@@ -4,11 +4,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 [project]
-name = "isaaclab-dev"
+name = "humanoid-simulation"
 version = "0.1.0"
 description = "Isaac Lab source checkout development environment."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "g1-datn",
+    "isaacsim[all,extscache]==6.0.0.1",
     "isaaclab",
     "isaaclab-assets",
     "isaaclab-contrib",
@@ -25,38 +27,6 @@ dependencies = [
     "torch==2.10.0",
     "torchaudio==2.10.0",
     "torchvision==0.25.0",
-]
-
-[project.optional-dependencies]
-contrib = [
-    "isaaclab-contrib",
-]
-mimic = [
-    "isaaclab-mimic",
-]
-newton = [
-    "isaaclab-newton[all]",
-    "isaaclab-physx[newton]",
-    "isaaclab-visualizers[newton]",
-]
-ov = [
-    "isaaclab-ovphysx[ovphysx]",
-]
-rl = [
-    "isaaclab-rl[rsl-rl]",
-]
-rl-all = [
-    "isaaclab-rl[all]",
-]
-rtx = [
-    "isaaclab-ov[ovrtx]",
-]
-all = [
-    "isaaclab-mimic",
-    "isaaclab-newton[all]",
-    "isaaclab-physx[newton]",
-    "isaaclab-rl[all]",
-    "isaaclab-visualizers[all]",
 ]
 
 [tool.ruff]
@@ -217,48 +187,49 @@ explicit = true
 # and PyPI. unsafe-best-match lets uv resolve the correct version from any index,
 # and prerelease=allow covers packages that only publish pre-release wheels.
 [tool.uv]
-environments = ["sys_platform == 'win32'"]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
 index-strategy = "unsafe-best-match"
 prerelease = "allow"
-override-dependencies = ["numpy>=2"]
+override-dependencies = ["numpy>=2", "coverage==7.6.1", "packaging==26.0", "newton==1.2.1", "torch==2.10.0", "torchvision==0.25.0", "torchaudio==2.10.0"]
 python-preference = "only-managed"
 package = false
 
 
 
 [tool.uv.sources]
+g1-datn = { path = "source/g1_datn", editable = true }
 
-isaaclab-dev = { path = "../../IsaacLab", editable = true }
+isaaclab-dev = { path = ".deps/IsaacLab", editable = true }
 
-isaaclab = { path = "../../IsaacLab/source/isaaclab", editable = true }
+isaaclab = { path = ".deps/IsaacLab/source/isaaclab", editable = true }
 
-isaaclab-assets = { path = "../../IsaacLab/source/isaaclab_assets", editable = true }
+isaaclab-assets = { path = ".deps/IsaacLab/source/isaaclab_assets", editable = true }
 
-isaaclab-contrib = { path = "../../IsaacLab/source/isaaclab_contrib", editable = true }
+isaaclab-contrib = { path = ".deps/IsaacLab/source/isaaclab_contrib", editable = true }
 
-isaaclab-experimental = { path = "../../IsaacLab/source/isaaclab_experimental", editable = true }
+isaaclab-experimental = { path = ".deps/IsaacLab/source/isaaclab_experimental", editable = true }
 
-isaaclab-mimic = { path = "../../IsaacLab/source/isaaclab_mimic", editable = true }
+isaaclab-mimic = { path = ".deps/IsaacLab/source/isaaclab_mimic", editable = true }
 
-isaaclab-newton = { path = "../../IsaacLab/source/isaaclab_newton", editable = true }
+isaaclab-newton = { path = ".deps/IsaacLab/source/isaaclab_newton", editable = true }
 
-isaaclab-ov = { path = "../../IsaacLab/source/isaaclab_ov", editable = true }
+isaaclab-ov = { path = ".deps/IsaacLab/source/isaaclab_ov", editable = true }
 
-"isaaclab-ovphysx" = { path = "../../IsaacLab/source/isaaclab_ovphysx", editable = true }
+"isaaclab-ovphysx" = { path = ".deps/IsaacLab/source/isaaclab_ovphysx", editable = true }
 
-isaaclab-physx = { path = "../../IsaacLab/source/isaaclab_physx", editable = true }
+isaaclab-physx = { path = ".deps/IsaacLab/source/isaaclab_physx", editable = true }
 
-isaaclab-ppisp = { path = "../../IsaacLab/source/isaaclab_ppisp", editable = true }
+isaaclab-ppisp = { path = ".deps/IsaacLab/source/isaaclab_ppisp", editable = true }
 
-isaaclab-rl = { path = "../../IsaacLab/source/isaaclab_rl", editable = true }
+isaaclab-rl = { path = ".deps/IsaacLab/source/isaaclab_rl", editable = true }
 
-isaaclab-tasks = { path = "../../IsaacLab/source/isaaclab_tasks", editable = true }
+isaaclab-tasks = { path = ".deps/IsaacLab/source/isaaclab_tasks", editable = true }
 
-isaaclab-tasks-experimental = { path = "../../IsaacLab/source/isaaclab_tasks_experimental", editable = true }
+isaaclab-tasks-experimental = { path = ".deps/IsaacLab/source/isaaclab_tasks_experimental", editable = true }
 
-isaaclab-teleop = { path = "../../IsaacLab/source/isaaclab_teleop", editable = true }
+isaaclab-teleop = { path = ".deps/IsaacLab/source/isaaclab_teleop", editable = true }
 
-isaaclab-visualizers = { path = "../../IsaacLab/source/isaaclab_visualizers", editable = true }
+isaaclab-visualizers = { path = ".deps/IsaacLab/source/isaaclab_visualizers", editable = true }
 torch = [
     { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
     { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'AMD64'" },

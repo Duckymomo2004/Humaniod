@@ -1,3 +1,16 @@
+# Run this G1 project
+
+```bash
+cd /workspace/Humaniod
+bash setup.sh --desktop
+```
+
+See [SETUP.md](SETUP.md) for the complete uv setup, desktop access, and run commands.
+
+Hướng dẫn đầy đủ bằng tiếng Việt: [HUONG_DAN_VI.md](HUONG_DAN_VI.md).
+
+---
+
 # Template for Isaac Lab Projects
 
 ## Overview
