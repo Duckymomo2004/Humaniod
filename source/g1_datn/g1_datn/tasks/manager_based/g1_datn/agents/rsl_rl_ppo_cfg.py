@@ -1,16 +1,62 @@
+﻿# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 from isaaclab.utils.configclass import configclass
 
-from isaaclab_tasks.manager_based.locomotion.velocity.config.g1.agents.rsl_rl_ppo_cfg import (
-    G1FlatPPORunnerCfg,
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
 )
 
 
 @configclass
-class PPORunnerCfg(G1FlatPPORunnerCfg):
-    """PPO configuration for the G1 DATN project."""
+class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
-    def __post_init__(self):
-        super().__post_init__()
+    # HoloSoma PPO
+    num_steps_per_env = 24
+    max_iterations = 25000
+    save_interval = 100
 
-        # Tách log/checkpoint của DATN khỏi task G1 chính thức
-        self.experiment_name = "g1_datn"
+    experiment_name = "g1_datn_holosoma_ppo"
+
+    empirical_normalization = False
+
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=0.8,
+
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
+
+        actor_hidden_dims=[512, 256, 128],
+        critic_hidden_dims=[512, 256, 128],
+
+        activation="elu",
+    )
+
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+
+        clip_param=0.2,
+
+        entropy_coef=0.01,
+
+        num_learning_epochs=8,
+        num_mini_batches=4,
+
+        learning_rate=1.0e-5,
+
+        optimizer="adamw",
+
+        schedule="adaptive",
+
+        gamma=0.99,
+        lam=0.95,
+
+        desired_kl=0.01,
+
+        max_grad_norm=1.0,
+    )
