@@ -18,6 +18,11 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.g1_datn_env_cfg:G1DatnEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+
+        "rsl_rl_cfg_entry_point":
+            f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+
+        "fast_sac_cfg_entry_point":
+            f"{agents.__name__}.fast_sac_cfg:G1FastSacRunnerCfg",
     },
 )
