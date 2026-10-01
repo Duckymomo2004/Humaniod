@@ -1,11 +1,17 @@
 # Run this G1 project
 
+**G1 đã train xong:** xem [hướng dẫn chạy bằng tiếng Việt](HUONG_DAN_FASTSAC.md).
+Checkpoint 50.000 iterations và báo cáo đánh giá nằm trong `models/g1_fastsac/`.
+
 ```bash
 cd /workspace/Humaniod
 bash setup.sh --desktop
 ```
 
 See [SETUP.md](SETUP.md) for the complete uv setup, desktop access, and run commands.
+
+For G1 FastSAC using the authors' Holosoma preset, see [FASTSAC_RUN.md](FASTSAC_RUN.md)
+for the separate uv environment, training command, live viewer, and evaluation.
 
 Hướng dẫn đầy đủ bằng tiếng Việt: [HUONG_DAN_VI.md](HUONG_DAN_VI.md).
 

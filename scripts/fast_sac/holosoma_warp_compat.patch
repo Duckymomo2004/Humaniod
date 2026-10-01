@@ -1,0 +1,146 @@
+diff --git a/src/holosoma/holosoma/agents/fast_sac/fast_sac_agent.py b/src/holosoma/holosoma/agents/fast_sac/fast_sac_agent.py
+index bf5e61b..58e686b 100644
+--- a/src/holosoma/holosoma/agents/fast_sac/fast_sac_agent.py
++++ b/src/holosoma/holosoma/agents/fast_sac/fast_sac_agent.py
+@@ -46,6 +46,21 @@ from holosoma.utils.safe_torch_import import (
+ torch.set_float32_matmul_precision("high")
+ 
+ 
++@torch.compiler.disable
++def _check_categorical_target(distributions, observations, actions, rewards, bootstrap, discount):
++    """Stop before an invalid categorical target can update model weights."""
++    mass = distributions.sum(dim=-1)
++    valid = (torch.isfinite(distributions).all() & (distributions >= 0).all()
++             & ((mass - 1).abs().max() < 0.01))
++    if not bool(valid):
++        path = "run/fastsac/invalid_categorical_target.pt"
++        torch.save({"distributions": distributions.detach().cpu(),
++                    "observations": observations.detach().cpu(),
++                    "actions": actions.detach().cpu(), "rewards": rewards.detach().cpu(),
++                    "bootstrap": bootstrap.detach().cpu(), "discount": discount.detach().cpu()}, path)
++        raise FloatingPointError(f"Invalid categorical target; diagnostic saved to {path}")
++
++
+ class FastSACEnv:
+     def __init__(
+         self,
+@@ -434,6 +449,11 @@ class FastSACAgent(BaseAlgo):
+                     bootstrap,
+                     discount,
+                 )
++                _check_categorical_target(
++                    target_distributions, next_critic_observations, next_state_actions,
++                    rewards - discount * bootstrap * self.log_alpha.exp() * next_state_log_probs,
++                    bootstrap, discount,
++                )
+                 target_values = qnet_target.get_value(target_distributions)
+                 target_value_max = target_values.max()
+                 target_value_min = target_values.min()
+@@ -676,6 +696,7 @@ class FastSACAgent(BaseAlgo):
+         action_std = torch.tensor(0.0, device=device)
+         actor_loss = torch.tensor(0.0, device=device)
+         actor_grad_norm = torch.tensor(0.0, device=device)
++        replay_start_step = self.global_step
+         pbar = tqdm.tqdm(total=args.num_learning_iterations, initial=self.global_step)
+ 
+         while self.global_step <= args.num_learning_iterations:
+@@ -689,6 +710,12 @@ class FastSACAgent(BaseAlgo):
+                     actions = policy(obs=norm_obs, dones=dones)
+ 
+                 next_obs, rewards, dones, infos = env.step(actions.float())
++                for name, value in (("actions", actions), ("observations", next_obs), ("rewards", rewards)):
++                    if not torch.isfinite(value).all():
++                        raise FloatingPointError(
++                            f"Non-finite {name} at training step {self.global_step}; "
++                            "stopping before corrupting the replay buffer or policy."
++                        )
+                 truncations = infos["time_outs"]
+ 
+                 # Update episode stats using logging helper
+@@ -729,7 +756,7 @@ class FastSACAgent(BaseAlgo):
+ 
+             # NOTE: args.batch_size is the global batch size
+             batch_size = max(args.batch_size // env.num_envs // self.gpu_world_size, 1)
+-            if self.global_step > args.learning_starts:
++            if self.global_step - replay_start_step > args.learning_starts:
+                 with self.logging_helper.record_learn_time():
+                     # Use batched sampling: sample once, normalize once, split into updates
+                     prepared_batches = self._sample_and_prepare_batches(
+diff --git a/src/holosoma/holosoma/simulator/mujoco/mujoco.py b/src/holosoma/holosoma/simulator/mujoco/mujoco.py
+index a48c645..b0f1235 100644
+--- a/src/holosoma/holosoma/simulator/mujoco/mujoco.py
++++ b/src/holosoma/holosoma/simulator/mujoco/mujoco.py
+@@ -1634,6 +1634,11 @@ class MuJoCo(BaseSimulator):
+             return
+ 
+         self.viewer = mujoco.viewer.launch_passive(self.root_model, self.root_data, key_callback=self._key_callback)
++        if self.simulator_config.viewer.enable_tracking:
++            self.viewer.cam.distance = 4.0
++            self.viewer.cam.azimuth = 135.0
++            self.viewer.cam.elevation = -20.0
++            self.viewer.cam.lookat[:] = self.root_data.xpos[self.body_ids[0]]
+         # Native camera-frustum gizmo (mjVIS_CAMERA) on the live viewer's own MjvOption; a viewer-only
+         # decoration drawn from each <camera>'s intrinsics, separate from the sensor renders.
+         apply_sensor_scene_flags(self.debug_viz_enabled, self.viewer.opt)
+diff --git a/src/holosoma/holosoma/utils/average_meters.py b/src/holosoma/holosoma/utils/average_meters.py
+index f4612fb..535adfa 100644
+--- a/src/holosoma/holosoma/utils/average_meters.py
++++ b/src/holosoma/holosoma/utils/average_meters.py
+@@ -39,7 +39,7 @@ class TensorAverageMeter:
+     def add(self, x):
+         if len(x.shape) == 0:
+             x = x.unsqueeze(0)
+-        self.tensors.append(x)
++        self.tensors.append(x.detach().clone())
+ 
+     def mean(self):
+         if len(self.tensors) == 0:
+diff --git a/src/holosoma/holosoma/utils/warp_utils.py b/src/holosoma/holosoma/utils/warp_utils.py
+index 2ae8730..f23b4bb 100644
+--- a/src/holosoma/holosoma/utils/warp_utils.py
++++ b/src/holosoma/holosoma/utils/warp_utils.py
+@@ -59,7 +59,7 @@ def ray_cast(ray_starts_world: torch.Tensor, ray_directions_world: torch.Tensor,
+     ray_starts_world = ray_starts_world.view(-1, 3)
+     ray_directions_world = ray_directions_world.view(-1, 3)
+     num_rays = len(ray_starts_world)
+-    ray_starts_world_wp = wp.types.array(
++    ray_starts_world_wp = wp.array(
+         ptr=ray_starts_world.data_ptr(),
+         dtype=wp.vec3,
+         shape=(num_rays,),
+@@ -67,7 +67,7 @@ def ray_cast(ray_starts_world: torch.Tensor, ray_directions_world: torch.Tensor,
+         # owner=False,
+         device=wp_mesh.device,
+     )
+-    ray_directions_world_wp = wp.types.array(
++    ray_directions_world_wp = wp.array(
+         ptr=ray_directions_world.data_ptr(),
+         dtype=wp.vec3,
+         shape=(num_rays,),
+@@ -77,7 +77,7 @@ def ray_cast(ray_starts_world: torch.Tensor, ray_directions_world: torch.Tensor,
+     )
+     ray_hits_world = torch.zeros((num_rays, 3), device=ray_starts_world.device)
+     ray_hits_world[:] = float("inf")
+-    ray_hits_world_wp = wp.types.array(
++    ray_hits_world_wp = wp.array(
+         ptr=ray_hits_world.data_ptr(),
+         dtype=wp.vec3,
+         shape=(num_rays,),
+@@ -134,7 +134,7 @@ def nearest_point(points: torch.Tensor, wp_mesh: wp.Mesh) -> torch.Tensor:
+     shape = points.shape
+     points = points.view(-1, 3)
+     num_points = len(points)
+-    points_wp = wp.types.array(
++    points_wp = wp.array(
+         ptr=points.data_ptr(),
+         dtype=wp.vec3,
+         shape=(num_points,),
+@@ -144,7 +144,7 @@ def nearest_point(points: torch.Tensor, wp_mesh: wp.Mesh) -> torch.Tensor:
+     )
+     mesh_points = torch.zeros((num_points, 3), device=points.device)
+     mesh_points[:] = float("inf")
+-    mesh_points_wp = wp.types.array(
++    mesh_points_wp = wp.array(
+         ptr=mesh_points.data_ptr(),
+         dtype=wp.vec3,
+         shape=(num_points,),

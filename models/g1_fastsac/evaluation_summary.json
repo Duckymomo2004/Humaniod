@@ -1,0 +1,52 @@
+{
+  "trajectory": "Recorded during evaluation; full trajectory retained on the training instance.",
+  "steps": 3000,
+  "simulated_duration_s": 60.0,
+  "finite_channels": {
+    "dof_pos_target": true,
+    "dof_pos": true,
+    "dof_vel": true,
+    "torques": true,
+    "torques_substep": true,
+    "dof_pos_substep": true,
+    "dof_vel_substep": true,
+    "actions": true,
+    "root_pos": true,
+    "root_quat_xyzw": true,
+    "root_lin_vel": true,
+    "root_ang_vel": true,
+    "body_pos_w": true,
+    "body_quat_xyzw": true,
+    "commanded_velocity": true
+  },
+  "command_tracking_rmse": {
+    "vx_m_s": 0.2302634378030694,
+    "vy_m_s": 0.24171740122805518,
+    "yaw_rad_s": 0.2692386856672271
+  },
+  "command_ranges": {
+    "vx_m_s": [
+      0.9073208570480347,
+      0.9073208570480347
+    ],
+    "vy_m_s": [
+      -0.2844669222831726,
+      -0.2844669222831726
+    ],
+    "yaw_rad_s": [
+      0.3250436782836914,
+      0.3250436782836914
+    ]
+  },
+  "body_tilt_degrees": {
+    "mean": 1.770014591619446,
+    "p95": 2.9170183348848915,
+    "max": 4.675692653270946
+  },
+  "fraction_of_samples_with_tilt_over_45_degrees": 0.0,
+  "root_height_range_m": [
+    0.6322373747825623,
+    0.7794454097747803
+  ],
+  "scope": "One recorded environment, including initial transient and any resets; not a real-robot test."
+}

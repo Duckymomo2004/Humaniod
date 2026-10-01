@@ -1,0 +1,7 @@
+torch==2.7.0
+torchvision==0.22.0
+isaacsim==5.1.0
+numpy<2
+setuptools<81
+flatdict==4.1.0
+warp-lang==1.13.0
