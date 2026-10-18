@@ -18,3 +18,4 @@ source/isaaclab_tasks/test/golden_images/**/*.png filter=lfs diff=lfs merge=lfs 
 
 # Small final FastSAC checkpoint is stored directly so clones need no LFS download.
 models/g1_fastsac/model_0050000.pt -filter -diff -merge -text
+patches/*.patch text eol=lf
