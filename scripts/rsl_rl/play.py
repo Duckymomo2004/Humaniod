@@ -27,6 +27,25 @@ import torch
 from packaging import version
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
+# Match the verified MultiSkill trainer: Kit must own USD before task configs
+# import runtime Articulation/SimulationContext through Unitree's MDP package.
+bootstrap_app = None
+if "--kit_first" in sys.argv and "--help" not in sys.argv and "-h" not in sys.argv:
+    from isaaclab.app import AppLauncher
+
+    bootstrap_parser = argparse.ArgumentParser(add_help=False)
+    bootstrap_parser.add_argument("--video", action="store_true")
+    AppLauncher.add_app_launcher_args(bootstrap_parser)
+    bootstrap_args, _ = bootstrap_parser.parse_known_args()
+    if bootstrap_args.video:
+        bootstrap_args.enable_cameras = True
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [sys.argv[0]]
+        bootstrap_app = AppLauncher(bootstrap_args).app
+    finally:
+        sys.argv = original_argv
+
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
@@ -61,6 +80,9 @@ with contextlib.suppress(ImportError):
 # -- argparse ----------------------------------------------------------------
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--max_steps", type=int, default=0, help="Stop after N simulation steps; 0 runs until closed.")
+parser.add_argument("--kit_first", action="store_true", help="Start Kit before loading runtime task configs.")
+parser.add_argument("--skip_export", action="store_true", help="Run inference without exporting JIT/ONNX files.")
+parser.add_argument("--camera_env", type=int, default=None, help="Follow this environment's terrain origin in Newton Viewer.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
@@ -189,12 +211,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # export the trained policy to JIT and ONNX formats
         export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
 
-        if version.parse(installed_version) >= version.parse("4.0.0"):
+        if not args_cli.skip_export and version.parse(installed_version) >= version.parse("4.0.0"):
             # use the new export functions for rsl-rl >= 4.0.0
             runner.export_policy_to_jit(path=export_model_dir, filename="policy.pt")
             runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
             policy_nn = None  # Not needed for rsl-rl >= 4.0.0
-        else:
+        elif not args_cli.skip_export:
             # extract the neural network for rsl-rl < 4.0.0
             if version.parse(installed_version) >= version.parse("2.3.0"):
                 policy_nn = runner.alg.policy
@@ -218,6 +240,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # reset environment
         obs = env.get_observations()
         timestep = 0
+        if args_cli.camera_env is not None and not 0 <= args_cli.camera_env < env.num_envs:
+            raise ValueError("--camera_env must identify an existing environment")
         # simulate environment
         try:
             while args_cli.max_steps == 0 or timestep < args_cli.max_steps:
@@ -225,6 +249,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 if sim.visualizers and not any(v.is_running() and not v.is_closed for v in sim.visualizers):
                     break
                 start_time = time.time()
+                if args_cli.camera_env is not None:
+                    origin = env.unwrapped.scene.env_origins[args_cli.camera_env].tolist()
+                    eye = (origin[0] + 2.5, origin[1] - 2.5, origin[2] + 1.8)
+                    target = (origin[0], origin[1], origin[2] + 0.65)
+                    for visualizer in sim.visualizers:
+                        if visualizer.cfg.visualizer_type == "newton":
+                            visualizer._apply_camera_pose((eye, target))
                 # run everything in inference mode
                 with torch.inference_mode():
                     # agent stepping
@@ -256,4 +287,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
 
 if __name__ == "__main__":
-    main()
+    exit_code = 0
+    try:
+        main()
+    except BaseException:
+        exit_code = 1
+        raise
+    finally:
+        if bootstrap_app is not None:
+            bootstrap_app.close(wait_for_replicator=False, exit_code=exit_code)

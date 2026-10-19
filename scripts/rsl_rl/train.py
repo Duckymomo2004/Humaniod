@@ -18,6 +18,7 @@ warnings.warn(
 import argparse
 import contextlib
 import importlib.metadata as metadata
+import json
 import logging
 import os
 import platform
@@ -29,6 +30,23 @@ import gymnasium as gym
 import torch
 from packaging import version
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+
+# Bootstrap before importing any Lab task/sensor configs. AppLauncher temporarily
+# reloads Lab modules during Kit startup; creating config classes before that can
+# also leave duplicate SensorBaseCfg identities in otherwise valid configs.
+bootstrap_app = None
+if "--kit_first" in sys.argv and "--help" not in sys.argv and "-h" not in sys.argv:
+    from isaaclab.app import AppLauncher
+
+    bootstrap_parser = argparse.ArgumentParser(add_help=False)
+    AppLauncher.add_app_launcher_args(bootstrap_parser)
+    bootstrap_args, _ = bootstrap_parser.parse_known_args()
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [sys.argv[0]]
+        bootstrap_app = AppLauncher(bootstrap_args).app
+    finally:
+        sys.argv = original_argv
 
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.utils.dict import print_dict
@@ -75,6 +93,12 @@ parser.add_argument(
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
+parser.add_argument(
+    "--kit_first", action="store_true", help="Start Kit before loading task configs that import runtime USD modules."
+)
+parser.add_argument(
+    "--verify_articulation", action="store_true", help="Verify the live G1 articulation has 29 controlled DoFs."
+)
 parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
@@ -191,6 +215,29 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # create isaac environment
         env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
+        if args_cli.verify_articulation:
+            live_env = env.unwrapped
+            robot = live_env.scene["robot"]
+            controlled_names = set()
+            for term_name in live_env.action_manager.active_terms:
+                term = live_env.action_manager.get_term(term_name)
+                controlled_names.update(term._joint_names)
+            articulation_report = {
+                "num_envs": live_env.num_envs,
+                "physics": type(env_cfg.sim.physics).__name__,
+                "device": str(robot.data.joint_pos.torch.device),
+                "joint_names": robot.joint_names,
+                "num_dof": robot.num_joints,
+                "num_controlled_joints": len(controlled_names),
+                "action_dim": live_env.action_manager.total_action_dim,
+            }
+            print("[ARTICULATION] " + json.dumps(articulation_report), flush=True)
+            assert articulation_report["num_dof"] == 29, articulation_report
+            assert articulation_report["num_controlled_joints"] == 29, articulation_report
+            assert articulation_report["action_dim"] == 29, articulation_report
+            assert articulation_report["physics"] == "PhysxCfg", articulation_report
+            assert articulation_report["device"].startswith("cuda"), articulation_report
+
         # convert to single-agent instance if required by the RL algorithm
         if isinstance(env.unwrapped.cfg, DirectMARLEnvCfg):
             from isaaclab.envs import multi_agent_to_single_agent
@@ -244,6 +291,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # run training
         try:
             runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+            if args_cli.verify_articulation:
+                steps = env.unwrapped.common_step_counter
+                assert steps >= agent_cfg.max_iterations * agent_cfg.num_steps_per_env, steps
+                assert torch.isfinite(env.unwrapped.scene["robot"].data.joint_pos.torch).all()
+                articulation_report.update(ppo_iterations=agent_cfg.max_iterations, physics_control_steps=steps)
+                with open(os.path.join(log_dir, "smoke_verification.json"), "w") as report_file:
+                    json.dump(articulation_report, report_file, indent=2)
+                print("[PASS] PhysX CUDA + G1 29 DoF + PPO: " + json.dumps(articulation_report), flush=True)
             print(f"Training time: {round(time.time() - start_time, 2)} seconds")
             # close the simulator
             env.close()
@@ -252,4 +307,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
 
 if __name__ == "__main__":
-    main()
+    # Unitree's MDP wildcard imports load runtime Articulation/SimulationContext
+    # while Hydra resolves the config. Kit must own USD before that happens;
+    # otherwise pip usd-core and Kit USD collide in native symbol registries.
+    app = bootstrap_app
+    exit_code = 0
+    try:
+        main()
+    except BaseException:
+        exit_code = 1
+        raise
+    finally:
+        if app is not None:
+            app.close(wait_for_replicator=False, exit_code=exit_code)

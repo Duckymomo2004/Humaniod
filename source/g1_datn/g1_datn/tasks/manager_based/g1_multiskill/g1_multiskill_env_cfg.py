@@ -1,4 +1,6 @@
 from importlib import import_module
+import os
+from pathlib import Path
 
 from isaaclab.utils.configclass import configclass
 
@@ -19,6 +21,13 @@ class G1MultiSkillEnvCfg(BaseG1EnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+
+        # Resolve the upstream asset placeholder without changing Unitree's checkout.
+        model_dir = os.environ.get("UNITREE_MODEL_DIR")
+        if model_dir:
+            self.scene.robot.spawn.usd_path = str(
+                Path(model_dir) / "G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd"
+            )
 
         # Bắt đầu nhỏ để kiểm tra môi trường
         self.scene.num_envs = 64

@@ -2,7 +2,7 @@ import gymnasium as gym
 
 gym.register(
     id="G1-MultiSkill-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.g1_multiskill_env:G1MultiSkillEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": (

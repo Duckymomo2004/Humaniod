@@ -11,7 +11,9 @@ LAB="$ROOT/.deps/IsaacLab-multiskill"
 # Exact working directory of original Humaniod scripts; imports g1_datn.tasks.
 cd "$ROOT"
 export ISAACLAB_PATH="$LAB"
+export UNITREE_MODEL_DIR="${UNITREE_MODEL_DIR:-$ROOT/.deps/unitree_model-multiskill}"
 export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 
 case "${1:-}" in
@@ -34,11 +36,11 @@ PY
     ;;
   --smoke)
     shift
-    set -- scripts/rsl_rl/train.py --task G1-MultiSkill-v0 --num_envs 1 --max_iterations 2 --visualizer none "$@"
+    set -- scripts/rsl_rl/train.py --task G1-MultiSkill-v0 --num_envs 1 --max_iterations 2 --visualizer none --kit_first --verify_articulation "$@"
     ;;
   --smoke64)
     shift
-    set -- scripts/rsl_rl/train.py --task G1-MultiSkill-v0 --num_envs 64 --max_iterations 2 --visualizer none "$@"
+    set -- scripts/rsl_rl/train.py --task G1-MultiSkill-v0 --num_envs 64 --max_iterations 2 --visualizer none --kit_first --verify_articulation "$@"
     ;;
   '')
     echo "Usage: ./run_multiskill.sh --preflight|--smoke|--smoke64|<project-script.py> [args...]" >&2
